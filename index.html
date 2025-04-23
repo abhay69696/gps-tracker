@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Bus Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    #map { height: 60vh; margin-bottom: 10px; }
+    #speed-display { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    .highlight { font-weight: bold; color: blue; }
+    .passed { color: gray; }
+    button { padding: 5px 10px; background-color: red; color: white; border: none; cursor: pointer; }
+    button:disabled { background-color: gray; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div id="speed-display">Current Speed: 0 km/h</div>
+  <div id="map"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Stop Name</th>
+        <th>Expected Arrival Time</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="stop-list"></tbody>
+  </table>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([12.9046, 74.8570], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(map);
+
+    // Custom bus icon
+    const busIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/61/61205.png', // Bus icon
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+
+    // Load stops from localStorage or initialize with default stops
+    const defaultStops = [
+      { name: "Mangalore", lat: 12.883844, lon: 74.863740, type: "departure", passed: false },
+      { name: "Nitte", lat: 13.183986, lon: 74.934003, type: "destination", passed: false }
+    ];
+    let stops = JSON.parse(localStorage.getItem('stops')) || defaultStops;
+
+    let busMarker = null;
+    let lastKnownLocation = [12.9046, 74.8570]; // Default to Mangalore
+    let lastUpdateTime = Date.now(); // Timestamp of the last update
+    let currentSpeed = 0; // Current speed in km/h
+
+    // Save stops to localStorage
+    function saveStops() {
+      localStorage.setItem('stops', JSON.stringify(stops));
+    }
+
+    // Render stops on the map and in the table
+    function renderStops() {
+      const stopList = document.getElementById('stop-list');
+      stopList.innerHTML = '';
+
+      stops.forEach((stop, index) => {
+        // Add marker to the map
+        L.marker([stop.lat, stop.lon])
+          .addTo(map)
+          .bindTooltip(stop.name, { permanent: true, direction: 'top' });
+
+        // Calculate expected arrival time
+        const distance = calculateDistance(lastKnownLocation[0], lastKnownLocation[1], stop.lat, stop.lon);
+        const arrivalTime = currentSpeed > 0 ? (distance / currentSpeed * 60).toFixed(1) : "N/A";
+
+        // Add stop to the table
+        const row = document.createElement('tr');
+        row.className = stop.passed ? 'passed' : stop.type === "departure" || stop.type === "destination" ? 'highlight' : '';
+        row.innerHTML = `
+          <td>${stop.name}</td>
+          <td>${arrivalTime === "N/A" ? "N/A" : `${arrivalTime} mins`}</td>
+          <td>
+            <button onclick="deleteStop(${index})" ${stop.type === "departure" || stop.type === "destination" ? 'disabled' : ''}>Delete</button>
+          </td>
+        `;
+        stopList.appendChild(row);
+      });
+    }
+
+    // Delete a stop
+    function deleteStop(index) {
+      stops.splice(index, 1);
+      saveStops();
+      renderStops();
+    }
+
+    // Calculate distance between two coordinates (Haversine formula)
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Radius of the Earth in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distance in km
+    }
+
+    // Fetch GPS data from ThingSpeak
+    function fetchGPSData() {
+      fetch("https://api.thingspeak.com/channels/2926249/feeds.json?results=1")
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.feeds || data.feeds.length === 0) {
+            console.error("No data available from ThingSpeak. Using last known location.");
+            return;
+          }
+
+          const feed = data.feeds[0];
+          const lat = parseFloat(feed.field1);
+          const lon = parseFloat(feed.field2);
+
+          if (isNaN(lat) || isNaN(lon)) {
+            console.error("Invalid GPS data from ThingSpeak. Using last known location.");
+            return;
+          }
+
+          const currentTime = Date.now();
+          const timeDiff = (currentTime - lastUpdateTime) / 1000; // Time difference in seconds
+          lastUpdateTime = currentTime;
+
+          const distance = calculateDistance(lastKnownLocation[0], lastKnownLocation[1], lat, lon); // Distance in km
+          currentSpeed = (distance / (timeDiff / 3600)).toFixed(1); // Speed in km/h
+
+          lastKnownLocation = [lat, lon]; // Update last known location
+
+          // Mark stops as passed if the bus has passed them
+          stops.forEach(stop => {
+            if (!stop.passed && calculateDistance(lat, lon, stop.lat, stop.lon) < 0.1) {
+              stop.passed = true;
+            }
+          });
+
+          // Update the current speed display
+          document.getElementById('speed-display').textContent = `Current Speed: ${currentSpeed} km/h`;
+
+          // Update stops table
+          renderStops();
+        })
+        .catch(error => {
+          console.error("Error fetching GPS data:", error);
+        });
+    }
+
+    // Add a stop by clicking on the map
+    map.on('click', function (e) {
+      const stopName = prompt("Enter a name for this stop:");
+      if (!stopName) return;
+
+      // Add the stop between departure and destination
+      stops.splice(stops.length - 1, 0, { name: stopName, lat: e.latlng.lat, lon: e.latlng.lng, passed: false });
+      saveStops();
+      renderStops();
+    });
+
+    function updateBusMarker(location) {
+      if (busMarker) {
+        busMarker.setLatLng(location);
+      } else {
+        busMarker = L.marker(location, { icon: busIcon }) // Custom bus marker
+          .addTo(map)
+          .bindTooltip("Bus", { permanent: true, direction: 'top' });
+      }
+    }
+
+    // Fetch GPS data every 5 seconds
+    setInterval(fetchGPSData, 5000);
+
+    // Initialize the map
+    function initialize() {
+      renderStops();
+      updateBusMarker(lastKnownLocation); // Place the bus marker at the default location
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
