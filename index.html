@@ -39,11 +39,13 @@
     }).addTo(map);
 
     // Custom bus icon
-    const busIcon = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/61/61205.png', // Bus icon
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-    });
+  // Custom bus icon
+const busIcon = L.icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/61/61205.png',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
+
 
     // Load stops from localStorage or initialize with default stops
     const defaultStops = [
