@@ -142,6 +142,8 @@ const busIcon = new L.Icon({
           currentSpeed = (distance / (timeDiff / 3600)).toFixed(1); // Speed in km/h
 
           lastKnownLocation = [lat, lon]; // Update last known location
+          updateBusMarker(lastKnownLocation);
+
 
           // Mark stops as passed if the bus has passed them
           stops.forEach(stop => {
@@ -172,15 +174,16 @@ const busIcon = new L.Icon({
       renderStops();
     });
 
-    function updateBusMarker(location) {
-      if (busMarker) {
-        busMarker.setLatLng(location);
-      } else {
-        busMarker = L.marker(location, { icon: busIcon }) // Custom bus marker
-          .addTo(map)
-          .bindTooltip("Bus", { permanent: true, direction: 'top' });
-      }
-    }
+ function updateBusMarker(location) {
+  if (busMarker) {
+    busMarker.setLatLng(location);
+  } else {
+    busMarker = L.marker(location, { icon: busIcon })
+      .addTo(map)
+      .bindTooltip("Bus", { permanent: true, direction: 'top' });
+  }
+}
+
 
     // Fetch GPS data every 5 seconds
     setInterval(fetchGPSData, 5000);
