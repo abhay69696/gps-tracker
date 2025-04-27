@@ -158,62 +158,65 @@
     }
 
     async function fetchGPSData() {
-      try {
-        const res = await fetch("https://api.thingspeak.com/channels/2926249/feeds.json?results=1");
-        const data = await res.json();
-        const lat = parseFloat(data.feeds[0].field1);
-        const lng = parseFloat(data.feeds[0].field2);
+  try {
+    const res = await fetch("https://api.thingspeak.com/channels/2926249/feeds.json?results=1");
+    const data = await res.json();
+    const feed = data.feeds[0];
+    const lat = parseFloat(feed.field1);
+    const lng = parseFloat(feed.field2);
+    const speed = parseFloat(feed.field3); // <-- Fetch speed here
 
-        if (!isNaN(lat) && !isNaN(lng)) {
-          const currentLatLng = { lat, lng };
+    if (!isNaN(lat) && !isNaN(lng)) {
+      const currentLatLng = { lat, lng };
 
-          if (!busMarker) {
-            busMarker = L.marker(currentLatLng).addTo(map).bindPopup("Bus");
-            previousLatLng = currentLatLng;
-          } else {
-            const distance = calculateDistance(previousLatLng, currentLatLng);
-            const speed = (distance / 5) * 3600;
-            speedEl.textContent = speed.toFixed(1);
-
-            let steps = 10;
-            for (let i = 1; i <= steps; i++) {
-              setTimeout(() => {
-                const interpolated = interpolatePos(previousLatLng, currentLatLng, i / steps);
-                busMarker.setLatLng(interpolated);
-              }, i * 100);
-            }
-            previousLatLng = currentLatLng;
-
-            let totalDist = 0;
-            let etaArrivals = 0;
-            let totalTime = 0;
-            const tableBody = document.getElementById('stopsTable').getElementsByTagName('tbody')[0];
-            tableBody.innerHTML = '';  // Clear the table before updating
-
-            stops.forEach((stop, i) => {
-              totalDist += stop.distance;
-              etaArrivals += stop.distance / speed;
-              totalTime = (totalDist / speed) * 60; // Total time in minutes
-
-              let etaClass = 'on-time';
-              if (etaArrivals > 15) {
-                etaClass = 'major-delay';
-              } else if (etaArrivals > 5) {
-                etaClass = 'slight-delay';
-              }
-
-              const row = tableBody.insertRow();
-              row.classList.add(etaClass);
-              row.innerHTML = `<td>${stop.name}</td><td>${etaArrivals.toFixed(1)} mins</td>`;
-            });
-
-            totalTimeEl.textContent = totalTime.toFixed(1);
-          }
+      if (!busMarker) {
+        busMarker = L.marker(currentLatLng).addTo(map).bindPopup("Bus");
+        previousLatLng = currentLatLng;
+      } else {
+        let steps = 10;
+        for (let i = 1; i <= steps; i++) {
+          setTimeout(() => {
+            const interpolated = interpolatePos(previousLatLng, currentLatLng, i / steps);
+            busMarker.setLatLng(interpolated);
+          }, i * 100);
         }
-      } catch (e) {
-        console.error("Failed to fetch GPS data", e);
+        previousLatLng = currentLatLng;
+
+        if (!isNaN(speed) && speed > 0) {
+          speedEl.textContent = speed.toFixed(1);
+
+          let totalDist = 0;
+          let etaArrivals = 0;
+          let totalTime = 0;
+          const tableBody = document.getElementById('stopsTable').getElementsByTagName('tbody')[0];
+          tableBody.innerHTML = ''; // Clear old rows
+
+          stops.forEach((stop) => {
+            totalDist += stop.distance;
+            etaArrivals = (totalDist / speed) * 60; // in minutes
+            totalTime = etaArrivals; // Latest total time
+
+            let etaClass = 'on-time';
+            if (etaArrivals > 15) {
+              etaClass = 'major-delay';
+            } else if (etaArrivals > 5) {
+              etaClass = 'slight-delay';
+            }
+
+            const row = tableBody.insertRow();
+            row.classList.add(etaClass);
+            row.innerHTML = `<td>${stop.name}</td><td>${etaArrivals.toFixed(1)} mins</td>`;
+          });
+
+          totalTimeEl.textContent = totalTime.toFixed(1);
+        }
       }
     }
+  } catch (e) {
+    console.error("Failed to fetch GPS data", e);
+  }
+}
+
 
     setInterval(fetchGPSData, 15000);    //lodalkjfda;kjf;a
     //kjaf;alk;fadf
