@@ -182,6 +182,7 @@
         }
         previousLatLng = currentLatLng;
 
+        // Check if speed is low and adjust ETA
         if (!isNaN(speed) && speed > 0) {
           speedEl.textContent = speed.toFixed(1);
 
@@ -193,7 +194,15 @@
 
           stops.forEach((stop) => {
             totalDist += stop.distance;
-            etaArrivals = (totalDist / speed) * 60; // in minutes
+
+            // Adjust ETA calculation based on speed
+            if (speed <= 5) {
+              // When speed is very low, set ETA to "Arriving shortly" or a fixed time
+              etaArrivals = 1; // Or you can set this to any reasonable value
+            } else {
+              etaArrivals = (totalDist / speed) * 60; // in minutes
+            }
+
             totalTime = etaArrivals; // Latest total time
 
             let etaClass = 'on-time';
@@ -209,6 +218,16 @@
           });
 
           totalTimeEl.textContent = totalTime.toFixed(1);
+        } else {
+          // If the speed is zero or too low (indicating stop), display "Arriving shortly"
+          speedEl.textContent = "0.0";
+          const tableBody = document.getElementById('stopsTable').getElementsByTagName('tbody')[0];
+          tableBody.innerHTML = ''; // Clear old rows
+
+          stops.forEach((stop) => {
+            const row = tableBody.insertRow();
+            row.innerHTML = `<td>${stop.name}</td><td>Arriving shortly</td>`;
+          });
         }
       }
     }
@@ -216,6 +235,7 @@
     console.error("Failed to fetch GPS data", e);
   }
 }
+
 
 
     setInterval(fetchGPSData, 15000);    //lodalkjfda;kjf;a
